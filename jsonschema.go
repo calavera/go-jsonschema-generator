@@ -44,14 +44,10 @@ func (d *Document) String() string {
 
 type property struct {
 	Type                 string               `json:"type,omitempty"`
-	Items                *item                `json:"items,omitempty"`
+	Items                *property            `json:"items,omitempty"`
 	Properties           map[string]*property `json:"properties,omitempty"`
 	Required             []string             `json:"required,omitempty"`
 	AdditionalProperties bool                 `json:"additionalProperties,omitempty"`
-}
-
-type item struct {
-	Type string `json:"type,omitempty"`
 }
 
 func (p *property) read(t reflect.Type, opts tagOptions) {
@@ -79,7 +75,18 @@ func (p *property) readFromSlice(t reflect.Type) {
 		p.Type = "string"
 	} else {
 		if jsType := getTypeFromMapping(k); jsType != "" {
-			p.Items = &item{Type: jsType}
+			switch k {
+			case reflect.Struct:
+				sp := &property{Type: jsType}
+				sp.readFromStruct(t.Elem())
+				p.Items = sp
+			case reflect.Map:
+				sp := &property{Type: jsType}
+				sp.readFromMap(t.Elem())
+				p.Items = sp
+			default:
+				p.Items = &property{Type: jsType}
+			}
 		}
 	}
 }
@@ -106,6 +113,9 @@ func (p *property) readFromStruct(t reflect.Type) {
 
 		tag := field.Tag.Get("json")
 		name, opts := parseTag(tag)
+		if name == "-" {
+			continue
+		}
 		if name == "" {
 			name = field.Name
 		}
